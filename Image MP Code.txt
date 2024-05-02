@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>CapsNet Image Encryption</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.9.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/capsule-network@1.0.1"></script>
+  </head>
+  <body>
+    <h1>CapsNet Image Encryption</h1>
+    <input type="file" accept="image/*" id="image-input">
+    <img id="original-image">
+    <canvas id="encrypted-image"></canvas>
+
+    <script>
+      // Load the CapsNet model
+      const MODEL_URL = 'https://storage.googleapis.com/tfjs-models/tfjs/capsule-network/mnist-capsnet.json';
+      const model = await tf.loadLayersModel(MODEL_URL);
+
+      // Get the input and image elements
+      const input = document.getElementById('image-input');
+      const originalImage = document.getElementById('original-image');
+      const canvas = document.getElementById('encrypted-image');
+
+      // Set the canvas size to match the original image
+      canvas.width = originalImage.width;
+      canvas.height = originalImage.height;
+
+      // When the input value changes, load the selected image
+      input.addEventListener('change', async () => {
+        const file = input.files[0];
+        const url = URL.createObjectURL(file);
+        originalImage.src = url;
+
+        // Wait for the image to load
+        await new Promise(resolve => originalImage.addEventListener('load', resolve));
+
+        // Draw the original image on the canvas
+        const context = canvas.getContext('2d');
+        context.drawImage(originalImage, 0, 0);
+
+        // Get the pixel data from the canvas
+        const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        const pixels = imageData.data;
+
+        // Convert the pixel data to a tensor and normalize it
+        const tensor = tf.browser.fromPixels(pixels).toFloat();
+        const normalizedTensor = tf.div(tensor, 255.0);
+
+        // Use the CapsNet model to encrypt the image
+        const encryptedTensor = model.predict(normalizedTensor.reshape([1, 28, 28, 1]));
+
+        // Normalize the encrypted tensor and convert it back to pixel data
+        const normalizedEncryptedTensor = tf.div(encryptedTensor, tf.max(encryptedTensor));
+        const encryptedPixels = Array.from(await tf.cast(normalizedEncryptedTensor.mul(255), 'int32').data());
+
+        // Set the encrypted pixel data back to the canvas
+        context.putImageData(new ImageData(new Uint8ClampedArray(encryptedPixels), canvas.width, canvas.height), 0, 0);
+
+        // Get the encrypted image data URI and set it as the source of the image element
+        const encryptedDataUri = canvas.toDataURL();
+        originalImage.src = encryptedDataUri;
+      });
+    </script>
+  </body>
+</html>
